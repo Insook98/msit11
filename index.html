@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>로컬 보안 엑셀 통계 분석 대시보드</title>
+  <!-- Chart.js 및 SheetJS (순수 클라이언트 사이드 파싱) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --primary-subtle: #eff6ff;
+      --border: #e2e8f0;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --radius: 12px;
+      --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.03);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg);
+      color: var(--text-main);
+      line-height: 1.6;
+      padding-bottom: 60px;
+    }
+
+    header {
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      color: white;
+      padding: 32px 24px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+    }
+    .header-inner {
+      max-width: 1280px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .header-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(16, 185, 129, 0.2);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #6ee7b7;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    header h1 {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+    header p {
+      color: #94a3b8;
+      font-size: 14.5px;
+      margin-top: 4px;
+    }
+
+    .container {
+      max-width: 1280px;
+      margin: 28px auto 0 auto;
+      padding: 0 20px;
+    }
+
+    /* Upload Area */
+    .upload-card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      border: 2px dashed #cbd5e1;
+      padding: 48px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      box-shadow: var(--shadow);
+      margin-bottom: 24px;
+    }
+    .upload-card:hover, .upload-card.dragover {
+      border-color: var(--primary);
+      background: var(--primary-subtle);
+      transform: translateY(-2px);
+    }
+    .upload-icon {
+      width: 56px;
+      height: 56px;
+      margin: 0 auto 16px;
+      background: #e0e7ff;
+      color: var(--primary);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .upload-card h2 {
+      font-size: 19px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #1e293b;
+    }
+    .upload-card p {
+      color: var(--text-muted);
+      font-size: 14px;
+      max-width: 500px;
+      margin: 0 auto 16px auto;
+    }
+    .upload-btn {
+      display: inline-block;
+      background: var(--primary);
+      color: white;
+      padding: 10px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .upload-btn:hover { background: var(--primary-hover); }
+    #file-input { display: none; }
+
+    /* Security Notice */
+    .security-notice {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #ecfdf5;
+      border: 1px solid #a7f3d0;
+      color: #065f46;
+      padding: 12px 18px;
+      border-radius: 8px;
+      font-size: 13.5px;
+      margin-bottom: 24px;
+    }
+
+    /* Dashboard Layout */
+    #dashboard-view { display: none; }
+
+    .file-status-bar {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      box-shadow: var(--shadow);
+    }
+    .file-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .file-badge {
+      background: #e2e8f0;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .reset-btn {
+      background: white;
+      border: 1px solid #cbd5e1;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #475569;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .reset-btn:hover {
+      background: #f1f5f9;
+      color: var(--text-main);
+    }
+
+    /* KPI Summary Cards */
+    .kpi-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .kpi-card {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+      border-top: 4px solid var(--primary);
+    }
+    .kpi-card h4 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .kpi-card .val {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--text-main);
+    }
+    .kpi-card .desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* Analysis Sections */
+    .section-card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      padding: 28px;
+      margin-bottom: 28px;
+    }
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid #f1f5f9;
+      padding-bottom: 14px;
+      margin-bottom: 18px;
+    }
+    .section-title {
+      font-size: 19px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .section-num {
+      width: 26px;
+      height: 26px;
+      background: var(--primary);
+      color: white;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .tag {
+      background: var(--primary-subtle);
+      color: var(--primary);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .chart-box {
+      position: relative;
+      height: 360px;
+      width: 100%;
+      margin: 20px 0;
+    }
+
+    /* Tables */
+    .table-wrapper {
+      overflow-x: auto;
+      margin-top: 16px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+      text-align: left;
+    }
+    th, td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      background: #f8fafc;
+      color: #475569;
+      font-weight: 600;
+    }
+    tr:hover td {
+      background: #fbfcfe;
+    }
+    .stat-num {
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+    }
+
+    /* Commentary / Insights */
+    .insight-box {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--primary);
+      border-radius: 8px;
+      padding: 18px;
+      margin-top: 20px;
+    }
+    .insight-title {
+      font-weight: 700;
+      font-size: 15px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #1e293b;
+    }
+    .insight-list {
+      list-style-type: none;
+      padding-left: 0;
+    }
+    .insight-list li {
+      font-size: 14px;
+      color: #334155;
+      margin-bottom: 6px;
+      position: relative;
+      padding-left: 18px;
+    }
+    .insight-list li::before {
+      content: "•";
+      color: var(--primary);
+      font-size: 18px;
+      position: absolute;
+      left: 4px;
+      top: -2px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    @media (max-width: 860px) {
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="header-inner">
+      <div>
+        <div class="header-badge">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          100% 로컬 브라우저 인메모리 연산 (서버 전송 없음)
+        </div>
+        <h1>엑셀 데이터 통계 분석 & 시각화 대시보드</h1>
+        <p>엑셀 파일(.xlsx)을 업로드하면 브라우저 메모리 안에서 즉시 파싱하여 3대 핵심 통계 분석을 수행합니다.</p>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="security-notice">
+      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+      <span><b>안심 보안 보장:</b> 귀하의 파일은 외부 웹 서버나 클라우드로 절대 전송되지 않으며, 사용자 PC 브라우저 내부(JavaScript Engine)에서만 안전하게 연산됩니다.</span>
+    </div>
+
+    <!-- Upload Screen -->
+    <div id="upload-view">
+      <div class="upload-card" id="drop-zone" onclick="document.getElementById('file-input').click()">
+        <div class="upload-icon">
+          <svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+        </div>
+        <h2>분석할 엑셀 파일(.xlsx, .xls)을 여기에 올려주세요</h2>
+        <p>폴더 안의 <b>가상기업 3개 5개년매출데이터.xlsx</b> 또는 동일 규격의 매출 데이터를 드래그하거나 아래 버튼을 클릭하여 선택하세요.</p>
+        <span class="upload-btn">내 컴퓨터에서 엑셀 파일 선택</span>
+        <input type="file" id="file-input" accept=".xlsx, .xls" />
+      </div>
+    </div>
+
+    <!-- Dashboard Screen -->
+    <div id="dashboard-view">
+      <div class="file-status-bar">
+        <div class="file-meta">
+          <span class="file-badge" id="lbl-filename">파일명.xlsx</span>
+          <span style="font-size: 13.5px; color: var(--text-muted);" id="lbl-record-count">총 0개 레코드 분석 완료</span>
+        </div>
+        <button class="reset-btn" onclick="resetDashboard()">다른 파일 분석하기</button>
+      </div>
+
+      <!-- Quick KPI Overview -->
+      <div class="kpi-container" id="kpi-container"></div>
+
+      <!-- Technique 1: Descriptive Statistics -->
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-title">
+            <span class="section-num">1</span>
+            기초 기술통계 및 데이터 분포 분석 (Descriptive Statistics)
+          </div>
+          <span class="tag">분포 및 산포 진단</span>
+        </div>
+        <p style="color: var(--text-muted); font-size: 14px;">
+          각 기업/지표별 데이터의 중심경향치(평균, 중위수)와 변동폭(표준편차, 최솟값, 최댓값, 사분위수)을 연산하여 데이터의 기본 골격을 진단합니다.
+        </p>
+
+        <div class="chart-box">
+          <canvas id="chart-stats"></canvas>
+        </div>
+
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>분석 대상 지표</th>
+                <th>표본수(N)</th>
+                <th>평균(Mean)</th>
+                <th>중앙값(Median)</th>
+                <th>표준편차(SD)</th>
+                <th>최솟값(Min)</th>
+                <th>최댓값(Max)</th>
+                <th>1사분위(Q1)</th>
+                <th>3사분위(Q3)</th>
+              </tr>
+            </thead>
+            <tbody id="table-stats-body"></tbody>
+          </table>
+        </div>
+
+        <div class="insight-box">
+          <div class="insight-title">💡 기술통계 해석 및 인사이트</div>
+          <ul class="insight-list" id="insight-stats"></ul>
+        </div>
+      </div>
+
+      <!-- Technique 2: Time Series Trend & Moving Average -->
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-title">
+            <span class="section-num">2</span>
+            시계열 추세 및 이동평균 스무딩 (Time Series & Moving Average)
+          </div>
+          <span class="tag">흐름 및 노이즈 제거</span>
+        </div>
+        <p style="color: var(--text-muted); font-size: 14px;">
+          월별 실제 매출 흐름과 단기 계절 노이즈를 제거한 12개월 중심 이동평균(12-MA)을 함께 비교하여 순수한 구조적 성장/쇠퇴 궤적을 추적합니다.
+        </p>
+
+        <div class="chart-box">
+          <canvas id="chart-trend"></canvas>
+        </div>
+
+        <div class="insight-box">
+          <div class="insight-title">💡 시계열 추세 해석 및 인사이트</div>
+          <ul class="insight-list" id="insight-trend"></ul>
+        </div>
+      </div>
+
+      <!-- Technique 3: Correlation & Interaction -->
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-title">
+            <span class="section-num">3</span>
+            피어슨 상관분석 및 기업간 상호작용 (Pearson Correlation Matrix)
+          </div>
+          <span class="tag">연관성 및 시장 대체효과</span>
+        </div>
+        <p style="color: var(--text-muted); font-size: 14px;">
+          지표 간의 피어슨 상관계수(r)를 산출하여, 두 기업 간의 실적이 동반 성장(공조)하는지 혹은 제로섬 경쟁(시장 잠식) 관계인지 검증합니다.
+        </p>
+
+        <div class="grid-2">
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr id="corr-table-head">
+                  <th>구분</th>
+                </tr>
+              </thead>
+              <tbody id="corr-table-body"></tbody>
+            </table>
+            <div style="font-size: 12.5px; color: var(--text-muted); margin-top: 12px; line-height: 1.5;">
+              • <b>r &gt; +0.7</b>: 매우 강한 양의 상관 (동반 성장/호황 공조)<br>
+              • <b>-0.3 &le; r &le; +0.3</b>: 상관관계 희박 (독립적 움직임)<br>
+              • <b>r &lt; -0.7</b>: 강한 음의 상관 (한쪽 성장 시 타사 매출 잠식)
+            </div>
+          </div>
+          <div class="chart-box" style="margin: 0; height: 320px;">
+            <canvas id="chart-corr"></canvas>
+          </div>
+        </div>
+
+        <div class="insight-box">
+          <div class="insight-title">💡 상관분석 해석 및 인사이트</div>
+          <ul class="insight-list" id="insight-corr"></ul>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // File Upload & Drag-and-Drop Handlers
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      if (e.dataTransfer.files.length > 0) {
+        handleFile(e.dataTransfer.files[0]);
+      }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) {
+        handleFile(e.target.files[0]);
+      }
+    });
+
+    // In-memory Parsing with SheetJS
+    function handleFile(file) {
+      if (!file.name.match(/\.(xlsx|xls)$/i)) {
+        alert('엑셀 파일(.xlsx 또는 .xls)만 업로드 가능합니다.');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          // Pure in-memory workbook reading
+          const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+          
+          // First worksheet parse
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+          
+          if (!rawRows || rawRows.length < 2) {
+            alert('유효한 데이터 행이 존재하지 않습니다.');
+            return;
+          }
+
+          processExcelData(file.name, rawRows);
+        } catch (err) {
+          console.error(err);
+          alert('엑셀 파일을 읽는 도중 오류가 발생했습니다: ' + err.message);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    // Process & Structure Data
+    let chartStatsInst = null;
+    let chartTrendInst = null;
+    let chartCorrInst = null;
+
+    function processExcelData(fileName, rows) {
+      // Header row
+      const headers = rows[0];
+      const dateColIdx = 0; // 기준월 / 날짜
+      
+      // Identify Numeric Series Columns
+      const seriesList = [];
+      const colors = ['#2563eb', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4'];
+
+      for (let c = 1; c < headers.length; c++) {
+        const title = (headers[c] || `열 ${c}`).toString().trim();
+        if (title) {
+          seriesList.push({
+            idx: c,
+            name: title,
+            color: colors[(c - 1) % colors.length],
+            data: []
+          });
+        }
+      }
+
+      const dateLabels = [];
+
+      for (let r = 1; r < rows.length; r++) {
+        const row = rows[r];
+        if (!row || row.length === 0 || row[dateColIdx] == null) continue;
+
+        let rawDate = row[dateColIdx];
+        let label = '';
+        if (rawDate instanceof Date) {
+          label = rawDate.toISOString().substring(0, 7);
+        } else if (typeof rawDate === 'number') {
+          // Excel serial date format
+          const jsDate = new Date(Math.round((rawDate - 25569) * 86400 * 1000));
+          label = jsDate.toISOString().substring(0, 7);
+        } else {
+          label = rawDate.toString().trim();
+        }
+        dateLabels.push(label);
+
+        seriesList.forEach(s => {
+          const val = parseFloat(row[s.idx]);
+          s.data.push(isNaN(val) ? 0 : val);
+        });
+      }
+
+      if (dateLabels.length === 0 || seriesList.length === 0) {
+        alert('분석 가능한 수치형 데이터가 부족합니다.');
+        return;
+      }
+
+      // Switch views
+      document.getElementById('upload-view').style.display = 'none';
+      document.getElementById('dashboard-view').style.display = 'block';
+
+      document.getElementById('lbl-filename').textContent = fileName;
+      document.getElementById('lbl-record-count').textContent = `총 ${dateLabels.length}개 시점 레코드 × ${seriesList.length}개 지표 분석`;
+
+      renderKPIs(seriesList);
+      renderTechnique1(seriesList);
+      renderTechnique2(dateLabels, seriesList);
+      renderTechnique3(seriesList);
+    }
+
+    // Reset back to upload
+    function resetDashboard() {
+      if (chartStatsInst) chartStatsInst.destroy();
+      if (chartTrendInst) chartTrendInst.destroy();
+      if (chartCorrInst) chartCorrInst.destroy();
+
+      document.getElementById('file-input').value = '';
+      document.getElementById('dashboard-view').style.display = 'none';
+      document.getElementById('upload-view').style.display = 'block';
+    }
+
+    // Math/Stats Utility
+    function calcStats(arr) {
+      const n = arr.length;
+      if (n === 0) return { n:0, mean:0, median:0, sd:0, min:0, max:0, q1:0, q3:0 };
+      const sorted = [...arr].sort((a,b) => a - b);
+      const sum = arr.reduce((a,b) => a + b, 0);
+      const mean = sum / n;
+      const median = n % 2 === 0 ? (sorted[n/2 - 1] + sorted[n/2]) / 2 : sorted[Math.floor(n/2)];
+      const variance = arr.reduce((a,b) => a + Math.pow(b - mean, 2), 0) / (n > 1 ? n - 1 : 1);
+      const sd = Math.sqrt(variance);
+      const min = sorted[0];
+      const max = sorted[n - 1];
+      const q1 = sorted[Math.floor(n * 0.25)];
+      const q3 = sorted[Math.floor(n * 0.75)];
+      return { n, mean, median, sd, min, max, q1, q3 };
+    }
+
+    // 1. KPI Cards
+    function renderKPIs(seriesList) {
+      const container = document.getElementById('kpi-container');
+      container.innerHTML = '';
+      seriesList.forEach(s => {
+        const stats = calcStats(s.data);
+        const card = document.createElement('div');
+        card.className = 'kpi-card';
+        card.style.borderTopColor = s.color;
+        const firstVal = s.data[0];
+        const lastVal = s.data[s.data.length - 1];
+        const growth = ((lastVal - firstVal) / firstVal) * 100;
+        const growthColor = growth >= 0 ? '#2563eb' : '#ef4444';
+        const growthSign = growth >= 0 ? '+' : '';
+
+        card.innerHTML = `
+          <h4>${s.name}</h4>
+          <div class="val">${lastVal.toFixed(2)}</div>
+          <div class="desc">
+            평균: <b>${stats.mean.toFixed(2)}</b> | 
+            전체 변동: <b style="color:${growthColor}">${growthSign}${growth.toFixed(1)}%</b>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    // Technique 1: Descriptive Statistics
+    function renderTechnique1(seriesList) {
+      const tbody = document.getElementById('table-stats-body');
+      tbody.innerHTML = '';
+      const insightEl = document.getElementById('insight-stats');
+      insightEl.innerHTML = '';
+
+      const labels = seriesList.map(s => s.name);
+      const means = [];
+      const mins = [];
+      const maxs = [];
+      const sds = [];
+
+      seriesList.forEach(s => {
+        const st = calcStats(s.data);
+        means.push(+st.mean.toFixed(2));
+        mins.push(+st.min.toFixed(2));
+        maxs.push(+st.max.toFixed(2));
+        sds.push(+st.sd.toFixed(2));
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${s.color}; margin-right:8px;"></span><b>${s.name}</b></td>
+          <td class="stat-num">${st.n}</td>
+          <td class="stat-num">${st.mean.toFixed(2)}</td>
+          <td class="stat-num">${st.median.toFixed(2)}</td>
+          <td class="stat-num">${st.sd.toFixed(2)}</td>
+          <td class="stat-num">${st.min.toFixed(2)}</td>
+          <td class="stat-num">${st.max.toFixed(2)}</td>
+          <td class="stat-num">${st.q1.toFixed(2)}</td>
+          <td class="stat-num">${st.q3.toFixed(2)}</td>
+        `;
+        tbody.appendChild(tr);
+
+        // Insight generation
+        const li = document.createElement('li');
+        li.innerHTML = `<b>${s.name}:</b> 월평균 <b>${st.mean.toFixed(2)}</b> (표준편차 ${st.sd.toFixed(2)}), 최저 ${st.min.toFixed(2)} ~ 최고 ${st.max.toFixed(2)} 범위로 분포하고 있습니다.`;
+        insightEl.appendChild(li);
+      });
+
+      if (chartStatsInst) chartStatsInst.destroy();
+      const ctx = document.getElementById('chart-stats').getContext('2d');
+      chartStatsInst = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            { label: '최솟값 (Min)', data: mins, backgroundColor: '#cbd5e1' },
+            { label: '평균 (Mean)', data: means, backgroundColor: seriesList.map(s => s.color) },
+            { label: '최댓값 (Max)', data: maxs, backgroundColor: '#334155' }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: { display: true, text: '지표별 최솟값 / 평균 / 최댓값 분포 비교' }
+          }
+        }
+      });
+    }
+
+    // Technique 2: Time Series Trend & Moving Average (12-MA)
+    function renderTechnique2(dateLabels, seriesList) {
+      const insightEl = document.getElementById('insight-trend');
+      insightEl.innerHTML = '';
+
+      const datasets = [];
+
+      seriesList.forEach(s => {
+        // Raw line
+        datasets.push({
+          label: `${s.name} (실측)`,
+          data: s.data,
+          borderColor: s.color,
+          backgroundColor: 'transparent',
+          borderWidth: 1.5,
+          pointRadius: 1.5,
+          tension: 0.2
+        });
+
+        // 12-month Moving Average
+        const ma = [];
+        const win = Math.min(12, Math.max(3, Math.floor(s.data.length / 5)));
+        for (let i = 0; i < s.data.length; i++) {
+          if (i < win - 1) {
+            ma.push(null);
+          } else {
+            let sum = 0;
+            for (let j = 0; j < win; j++) sum += s.data[i - j];
+            ma.push(+(sum / win).toFixed(2));
+          }
+        }
+
+        datasets.push({
+          label: `${s.name} (${win}기간 이동평균 추세)`,
+          data: ma,
+          borderColor: s.color,
+          borderDash: [5, 4],
+          borderWidth: 3,
+          pointRadius: 0,
+          tension: 0.2
+        });
+
+        // Insight summary
+        const first = s.data[0];
+        const last = s.data[s.data.length - 1];
+        const diff = last - first;
+        const dir = diff > 0 ? '지속적 우상향 상승세' : (diff < 0 ? '완만한 하향 침체세' : '횡보 정체');
+        const li = document.createElement('li');
+        li.innerHTML = `<b>${s.name}:</b> 초기 <b>${first}</b>에서 종료 시점 <b>${last}</b>로 변동하며 전반적으로 <b>${dir}</b>를 나타내고 있습니다.`;
+        insightEl.appendChild(li);
+      });
+
+      if (chartTrendInst) chartTrendInst.destroy();
+      const ctx = document.getElementById('chart-trend').getContext('2d');
+      chartTrendInst = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: dateLabels,
+          datasets: datasets
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            title: { display: true, text: '전체 기간 시계열 실측치 및 이동평균 스무딩 트렌드' }
+          }
+        }
+      });
+    }
+
+    // Technique 3: Correlation Matrix
+    function renderTechnique3(seriesList) {
+      const head = document.getElementById('corr-table-head');
+      const body = document.getElementById('corr-table-body');
+      const insightEl = document.getElementById('insight-corr');
+      head.innerHTML = '<th>구분</th>';
+      body.innerHTML = '';
+      insightEl.innerHTML = '';
+
+      seriesList.forEach(s => {
+        const th = document.createElement('th');
+        th.textContent = s.name;
+        head.appendChild(th);
+      });
+
+      function pearson(x, y) {
+        const n = Math.min(x.length, y.length);
+        if (n <= 1) return 0;
+        const xBar = x.slice(0, n).reduce((a,b)=>a+b,0)/n;
+        const yBar = y.slice(0, n).reduce((a,b)=>a+b,0)/n;
+        let num = 0, d1 = 0, d2 = 0;
+        for (let i = 0; i < n; i++) {
+          const dx = x[i] - xBar;
+          const dy = y[i] - yBar;
+          num += dx * dy;
+          d1 += dx * dx;
+          d2 += dy * dy;
+        }
+        if (d1 === 0 || d2 === 0) return 0;
+        return num / Math.sqrt(d1 * d2);
+      }
+
+      const pairs = [];
+
+      for (let i = 0; i < seriesList.length; i++) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td><b>${seriesList[i].name}</b></td>`;
+        for (let j = 0; j < seriesList.length; j++) {
+          const r = pearson(seriesList[i].data, seriesList[j].data);
+          let color = '#475569';
+          if (i !== j) {
+            if (r >= 0.7) color = '#2563eb';
+            else if (r <= -0.5) color = '#ef4444';
+            if (i < j) {
+              pairs.push({ s1: seriesList[i].name, s2: seriesList[j].name, r });
+            }
+          }
+          tr.innerHTML += `<td class="stat-num" style="color:${color}">${r.toFixed(3)}</td>`;
+        }
+        body.appendChild(tr);
+      }
+
+      // Generate Insights
+      pairs.forEach(p => {
+        const li = document.createElement('li');
+        let interp = '';
+        if (p.r >= 0.7) interp = '강력한 동반 성장(양의 상관, 산업 동조화)';
+        else if (p.r <= -0.6) interp = '강한 음의 상관 (한쪽 지표 성장 시 타사 매출 잠식/대체 효과)';
+        else interp = '상관관계가 낮거나 독립적인 흐름';
+        li.innerHTML = `<b>${p.s1} ↔ ${p.s2} (r = ${p.r.toFixed(3)}):</b> ${interp}`;
+        insightEl.appendChild(li);
+      });
+
+      // Scatter Plot for top pair
+      if (chartCorrInst) chartCorrInst.destroy();
+      const ctx = document.getElementById('chart-corr').getContext('2d');
+      if (seriesList.length >= 2) {
+        chartCorrInst = new Chart(ctx, {
+          type: 'scatter',
+          data: {
+            datasets: [{
+              label: `${seriesList[0].name} vs ${seriesList[1].name}`,
+              data: seriesList[0].data.map((v, idx) => ({ x: v, y: seriesList[1].data[idx] })),
+              backgroundColor: seriesList[0].color
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { title: { display: true, text: `산점도 (${seriesList[0].name} vs ${seriesList[1].name})` } },
+            scales: {
+              x: { title: { display: true, text: seriesList[0].name } },
+              y: { title: { display: true, text: seriesList[1].name } }
+            }
+          }
+        });
+      }
+    }
+  </script>
+</body>
+</html>
